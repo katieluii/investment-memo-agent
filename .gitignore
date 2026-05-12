@@ -1,0 +1,10 @@
+.env
+.env.local
+__pycache__/
+*.pyc
+*.db
+.venv/
+apps/api/uploads/*
+!apps/api/uploads/.gitkeep
+apps/web/.next/
+apps/web/node_modules/
