@@ -28,6 +28,7 @@ class Deal(Base):
     memos = relationship("Memo", back_populates="deal", cascade="all, delete-orphan")
     feedback = relationship("AgentFeedback", back_populates="deal", cascade="all, delete-orphan")
     founder_insights = relationship("FounderInsights", back_populates="deal", uselist=False, cascade="all, delete-orphan")
+    agent_runs = relationship("AgentRun", back_populates="deal", cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -94,6 +95,19 @@ class FounderInsights(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     deal = relationship("Deal", back_populates="founder_insights")
+
+
+class AgentRun(Base):
+    __tablename__ = "agent_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    deal_id = Column(Integer, ForeignKey("deals.id"), nullable=False)
+    status = Column(String, default="running")  # running | completed | failed
+    error = Column(Text)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime)
+
+    deal = relationship("Deal", back_populates="agent_runs")
 
 
 class AgentFeedback(Base):

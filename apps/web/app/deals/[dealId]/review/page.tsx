@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AgentFeedback,
   AgentOutput,
+  AgentRun,
   generateMemo,
   getAgentOutputs,
+  getAgentRunStatus,
   getFeedback,
   runAgents,
   saveFeedback,
@@ -282,13 +284,14 @@ export default function ReviewPage() {
 
   const [outputs, setOutputs] = useState<AgentOutput[]>([]);
   const [feedbackMap, setFeedbackMap] = useState<Record<string, string>>({});
-  const [running, setRunning] = useState(false);
+  const [runStatus, setRunStatus] = useState<AgentRun | null>(null);
   const [generatingMemo, setGeneratingMemo] = useState(false);
   const [error, setError] = useState("");
   const [runError, setRunError] = useState("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadOutputs = () =>
-    getAgentOutputs(id).then(setOutputs).catch((e) => setError(e.message));
+    getAgentOutputs(id).then(setOutputs).catch(() => {});
 
   const loadFeedback = () =>
     getFeedback(id).then((entries) => {
@@ -299,23 +302,50 @@ export default function ReviewPage() {
       setFeedbackMap(map);
     }).catch(() => {});
 
+  const stopPolling = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  };
+
+  const startPolling = () => {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await getAgentRunStatus(id);
+        setRunStatus(status);
+        if (status.status === "completed") {
+          stopPolling();
+          await loadOutputs();
+        } else if (status.status === "failed") {
+          stopPolling();
+          setRunError(status.error || "Agent run failed");
+        }
+      } catch {}
+    }, 3000);
+  };
+
   useEffect(() => {
     loadOutputs();
     loadFeedback();
+    // Check if a run is already in progress
+    getAgentRunStatus(id).then((s) => {
+      setRunStatus(s);
+      if (s.status === "running") startPolling();
+    }).catch(() => {});
+    return () => stopPolling();
   }, [id]);
 
   const handleRun = async () => {
-    setRunning(true);
     setRunError("");
     try {
-      await runAgents(id);
-      await loadOutputs();
+      const run = await runAgents(id);
+      setRunStatus(run);
+      startPolling();
     } catch (e: unknown) {
-      setRunError(e instanceof Error ? e.message : "Failed to run agents");
-    } finally {
-      setRunning(false);
+      setRunError(e instanceof Error ? e.message : "Failed to start agents");
     }
   };
+
+  const running = runStatus?.status === "running";
 
   const handleGenerateMemo = async () => {
     setGeneratingMemo(true);
@@ -354,7 +384,7 @@ export default function ReviewPage() {
 
       <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
         <button onClick={handleRun} disabled={running}>
-          {running ? "Running agents (this may take 20–30 seconds)..." : hasOutputs ? "Re-run Agents" : "Run Agents"}
+          {running ? "Agents running — checking every 3 seconds..." : hasOutputs ? "Re-run Agents" : "Run Agents"}
         </button>
         {hasOutputs && (
           <button

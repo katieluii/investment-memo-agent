@@ -106,8 +106,21 @@ export function indexDocuments(dealId: number): Promise<{ message: string }> {
 
 // ── Agents ───────────────────────────────────────────────────────────────────
 
-export function runAgents(dealId: number): Promise<{ message: string }> {
+export interface AgentRun {
+  id: number;
+  deal_id: number;
+  status: "running" | "completed" | "failed";
+  error?: string;
+  started_at: string;
+  completed_at?: string;
+}
+
+export function runAgents(dealId: number): Promise<AgentRun> {
   return apiFetch(`/deals/${dealId}/run-agents`, { method: "POST" });
+}
+
+export function getAgentRunStatus(dealId: number): Promise<AgentRun> {
+  return apiFetch(`/deals/${dealId}/agent-run-status`);
 }
 
 export function getAgentOutputs(dealId: number): Promise<AgentOutput[]> {

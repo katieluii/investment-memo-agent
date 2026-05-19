@@ -63,6 +63,17 @@ class MemoOut(BaseModel):
     created_at: datetime
 
 
+class AgentRunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    deal_id: int
+    status: str
+    error: Optional[str]
+    started_at: datetime
+    completed_at: Optional[datetime]
+
+
 class FounderInsightsCreate(BaseModel):
     meeting_notes: Optional[str] = None
     key_impressions: Optional[str] = None
