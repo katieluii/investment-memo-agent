@@ -145,7 +145,7 @@ Deal:
 Document excerpts:
 {context if context else "No documents uploaded — base your analysis on the deal fields above."}
 
-Return ONLY valid JSON (no markdown fences) with this exact structure:
+Return ONLY valid JSON (no markdown fences). Keep each item to one short sentence.
 {{
   "clinical_risks": ["risk 1", "risk 2", "risk 3"],
   "regulatory_risks": ["risk 1", "risk 2"],
@@ -156,7 +156,7 @@ Return ONLY valid JSON (no markdown fences) with this exact structure:
 
     msg = _client.messages.create(
         model=_MODEL,
-        max_tokens=800,
+        max_tokens=1200,
         messages=[{"role": "user", "content": prompt}],
     )
     parsed = _parse_json(msg.content[0].text)
