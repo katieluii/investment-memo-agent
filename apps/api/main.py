@@ -15,6 +15,8 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         seed_demo.run(db)
+    except Exception:
+        pass
     finally:
         db.close()
     yield
