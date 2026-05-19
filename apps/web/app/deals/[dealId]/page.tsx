@@ -36,6 +36,7 @@ export default function DealPage() {
 
   return (
     <div>
+      <p><Link href="/deals">← All deals</Link></p>
       <h1>{deal.company_name}</h1>
 
       <table style={{ borderCollapse: "collapse", marginBottom: "1.5rem" }}>
