@@ -28,3 +28,15 @@ def get_deal(deal_id: int, db: Session = Depends(get_db)):
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
     return deal
+
+
+@router.patch("/{deal_id}", response_model=schemas.DealOut)
+def update_deal(deal_id: int, updates: schemas.DealCreate, db: Session = Depends(get_db)):
+    deal = db.query(models.Deal).filter(models.Deal.id == deal_id).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    for field, value in updates.model_dump(exclude_unset=True).items():
+        setattr(deal, field, value)
+    db.commit()
+    db.refresh(deal)
+    return deal

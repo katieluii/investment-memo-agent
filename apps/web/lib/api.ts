@@ -80,6 +80,14 @@ export function createDeal(data: DealCreate): Promise<Deal> {
   });
 }
 
+export function updateDeal(dealId: number, data: DealCreate): Promise<Deal> {
+  return apiFetch(`/deals/${dealId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
 // ── Documents ────────────────────────────────────────────────────────────────
 
 export function getDocuments(dealId: number): Promise<Document[]> {
