@@ -1,19 +1,13 @@
 """
-Creates a demo deal with AI-generated agent outputs and memo on first startup.
-Skips silently if deals already exist or ANTHROPIC_API_KEY is not set.
+Seeds a demo deal with static pre-written content on first startup.
+Runs whenever the DB is empty, regardless of ANTHROPIC_API_KEY.
 """
 
 import json
-import os
-import re
 
-import anthropic
 from sqlalchemy.orm import Session
 
 import models
-from database import SessionLocal
-
-_MODEL = "claude-haiku-4-5-20251001"
 
 _DEMO_DEAL = {
     "company_name": "Axon Therapeutics",
@@ -23,11 +17,10 @@ _DEMO_DEAL = {
     "round_type": "Series B",
     "geography": "USA",
     "fund_thesis": (
-        "AXN-247 is a next-generation CDK4/6 inhibitor with a differentiated "
-        "selectivity profile designed to address the primary resistance mechanism "
-        "seen with first-generation CDK4/6 inhibitors. The Phase 2b SUMMIT trial "
-        "is enrolling patients who have progressed on palbociclib, ribociclib, or "
-        "abemaciclib, with a primary endpoint of PFS."
+        "AXN-247 is a next-generation CDK4/6 inhibitor with a differentiated selectivity "
+        "profile designed to address the primary resistance mechanism seen with first-generation "
+        "CDK4/6 inhibitors. The Phase 2b SUMMIT trial is enrolling patients who have progressed "
+        "on palbociclib, ribociclib, or abemaciclib, with a primary endpoint of PFS."
     ),
 }
 
@@ -35,164 +28,199 @@ _DEMO_CHUNKS = [
     {
         "filename": "SUMMIT_trial_synopsis.txt",
         "text": (
-            "SUMMIT Phase 2b Trial Synopsis\n"
-            "Primary endpoint: Progression-free survival (PFS) in CDK4/6i-pretreated "
-            "HR+/HER2- advanced breast cancer patients. 148 patients enrolled across "
-            "12 sites (US/EU). Interim analysis at 6 months: median PFS 7.4 months "
-            "(95% CI 5.8–9.1) vs historical control 3.8 months on chemotherapy. "
-            "ORR 28%. Grade 3/4 AEs: neutropenia 12%, fatigue 6%, nausea 4%. "
-            "No treatment-related discontinuations in first 24 weeks."
+            "SUMMIT Phase 2b Trial Synopsis. Primary endpoint: Progression-free survival (PFS) "
+            "in CDK4/6i-pretreated HR+/HER2- advanced breast cancer patients. 148 patients "
+            "enrolled across 12 sites (US/EU). Interim analysis at 6 months: median PFS "
+            "7.4 months (95% CI 5.8-9.1) vs historical control 3.8 months on chemotherapy. "
+            "ORR 28%. Grade 3/4 AEs: neutropenia 12%, fatigue 6%, nausea 4%. No "
+            "treatment-related discontinuations in first 24 weeks."
         ),
     },
     {
         "filename": "data_room_overview.txt",
         "text": (
-            "Series B Financing Overview\n"
-            "Target raise: $95M. Lead investor: Novo Holdings. Co-investors: Versant "
-            "Ventures, Atlas Venture. Use of proceeds: Fund SUMMIT Phase 2b to "
-            "primary completion (Q4 2026), initiate Phase 3 design, expand IP estate, "
-            "and build out commercial readiness team. Post-money valuation: $380M. "
-            "Key milestones funded: topline Phase 2b data (Q3 2026), IND filing for "
-            "AXN-247 combination arm (Q2 2026), patent grant for selective CDK4 "
-            "binding conformation (expected Q1 2026)."
+            "Series B Financing Overview. Target raise: $95M. Lead investor: Novo Holdings. "
+            "Co-investors: Versant Ventures, Atlas Venture. Use of proceeds: Fund SUMMIT Phase 2b "
+            "to primary completion (Q4 2026), initiate Phase 3 design, expand IP estate, and "
+            "build out commercial readiness team. Post-money valuation: $380M."
         ),
     },
     {
         "filename": "competitive_landscape.txt",
         "text": (
-            "CDK4/6 Inhibitor Competitive Landscape\n"
-            "Approved: palbociclib (Pfizer, ~$5B peak sales), ribociclib (Novartis), "
-            "abemaciclib (Lilly). Key resistance mechanisms: RB1 loss, CCND1 "
-            "amplification, CDK6 upregulation. AXN-247 differentiation: selective "
-            "CDK4 inhibition (>50x selectivity over CDK6) preserves T-cell function "
-            "enabling combination with immunotherapy; shown to retain activity in "
-            "CCND1-amplified cell lines. Emerging competition: Relay Therapeutics "
-            "RLY-9966 (Phase 1), G1 Therapeutics trilaciclib (differentiated MoA). "
-            "Market opportunity: ~180,000 US patients annually progress on first-line "
-            "CDK4/6i; no approved targeted option in this setting."
+            "CDK4/6 Inhibitor Competitive Landscape. Approved agents: palbociclib (Pfizer), "
+            "ribociclib (Novartis), abemaciclib (Lilly). AXN-247 differentiation: selective "
+            "CDK4 inhibition (>50x selectivity over CDK6) preserves T-cell function. Retains "
+            "activity in CCND1-amplified cell lines. ~180,000 US patients annually progress "
+            "on first-line CDK4/6i with no approved targeted option in this setting."
         ),
     },
 ]
 
+_DILIGENCE_OUTPUT = {
+    "asset": "AXN-247",
+    "indication": "HR+/HER2- advanced breast cancer",
+    "stage": "Phase 2b",
+    "mechanism_of_action": "Selective CDK4 inhibitor (>50x selectivity over CDK6) that blocks cell cycle progression while preserving T-cell function, enabling combination with immunotherapy and activity in CDK4/6i-resistant tumours.",
+    "clinical_data_summary": "SUMMIT Phase 2b interim (n=148): median PFS 7.4 months vs 3.8-month historical control on chemotherapy; ORR 28%; Grade 3/4 AEs neutropenia 12%, fatigue 6%, nausea 4%; no treatment-related discontinuations in first 24 weeks.",
+    "competitive_landscape": "Approved CDK4/6i (palbociclib, ribociclib, abemaciclib) all lose activity post-progression; AXN-247 differentiates via CDK4 selectivity and CCND1-amplification activity. No approved targeted agent in this post-CDK4/6i setting.",
+    "unmet_need": "~180,000 US patients/year progress on first-line CDK4/6i with no approved targeted therapy; current standard is chemotherapy with poor outcomes, representing a high-value unmet need.",
+    "citations": [
+        {"filename": "SUMMIT_trial_synopsis.txt", "chunk_index": 0, "quote": "Interim analysis at 6 months: median PFS 7.4 months (95% CI 5.8-9.1) vs historical control 3.8 months..."},
+        {"filename": "competitive_landscape.txt", "chunk_index": 0, "quote": "~180,000 US patients annually progress on first-line CDK4/6i with no approved targeted option..."},
+    ],
+}
 
-def _parse_json(raw: str) -> dict:
-    raw = raw.strip()
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", raw, re.DOTALL)
-        if m:
-            return json.loads(m.group())
-        return {}
+_FINANCING_OUTPUT = {
+    "round_type": "Series B",
+    "geography": "USA",
+    "estimated_raise": "$95M",
+    "use_of_proceeds": "Fund SUMMIT Phase 2b to primary completion (Q4 2026), initiate Phase 3 design, expand IP estate, and build out commercial readiness team.",
+    "comparable_financings": "Relay Therapeutics Series C $150M (2021, precision oncology Phase 1); Blueprint Medicines Series C $100M (2017, pre-Phase 2 data package); Olema Pharmaceuticals $116M Series B (2020, ER+ breast cancer CDK4/6i combination).",
+    "valuation_considerations": "Post-money $380M implied by $95M raise. Supported by Phase 2b interim PFS data exceeding historical control, validated mechanism (CDK4/6i class $10B+ market), and lead investor Novo Holdings. Key value inflection: SUMMIT primary endpoint readout Q4 2026.",
+    "citations": [
+        {"filename": "data_room_overview.txt", "chunk_index": 0, "quote": "Target raise: $95M. Lead investor: Novo Holdings. Co-investors: Versant Ventures, Atlas Venture..."},
+    ],
+}
 
+_RISK_OUTPUT = {
+    "clinical_risks": [
+        "SUMMIT primary endpoint may not reach statistical significance if interim PFS benefit is not maintained at final analysis.",
+        "CDK4/6i-resistant patient population is heterogeneous; biomarker stratification may be needed to identify responders.",
+        "Neutropenia rate (12% G3/4) could limit dose intensity and complicate combination strategies.",
+    ],
+    "regulatory_risks": [
+        "FDA may require a randomised Phase 3 vs. chemotherapy for accelerated approval given single-arm Phase 2b design.",
+        "IP landscape for CDK4/6 inhibitors is dense; freedom-to-operate review needed before NDA filing.",
+    ],
+    "competitive_risks": [
+        "Relay Therapeutics RLY-9966 (Phase 1 CDK4-selective inhibitor) could reach Phase 2 readout on a similar timeline.",
+        "Large pharma CDK4/6i franchises (Pfizer, Lilly) may pursue combination strategies that erode the post-progression market.",
+    ],
+    "financial_risks": [
+        "$95M Series B funds through Phase 2b completion but not Phase 3; a $200M+ Series C will be required before commercialisation.",
+        "Phase 3 design and scale-up costs are not yet modelled; cost overruns could compress runway.",
+    ],
+    "diligence_questions": [
+        "What is the planned Phase 3 design — randomised vs. chemotherapy, or combination arm with immunotherapy?",
+        "What biomarker strategy is in place to identify patients most likely to respond to AXN-247 post-CDK4/6i?",
+        "What is the manufacturing process for AXN-247, and has CMC work been completed to support Phase 3 scale?",
+        "Has a Freedom-to-Operate analysis been completed against palbociclib, ribociclib, and abemaciclib IP estates?",
+        "What are the terms of the Novo Holdings lead investment — is there a board seat, pro-rata rights, or follow-on commitment?",
+    ],
+    "citations": [
+        {"filename": "SUMMIT_trial_synopsis.txt", "chunk_index": 0, "quote": "Grade 3/4 AEs: neutropenia 12%, fatigue 6%, nausea 4%..."},
+        {"filename": "competitive_landscape.txt", "chunk_index": 0, "quote": "AXN-247 differentiation: selective CDK4 inhibition (>50x selectivity over CDK6)..."},
+    ],
+}
 
-def _run_agent(client: anthropic.Anthropic, deal: models.Deal, agent_name: str, chunks_text: str) -> dict:
-    if agent_name == "diligence_agent":
-        prompt = f"""You are a biopharma investment analyst. Analyse this deal and return a JSON object.
+_MEMO_MARKDOWN = """# Investment Memo: Axon Therapeutics
 
-Deal: {deal.company_name} | {deal.asset_name} | {deal.indication} | {deal.stage}
-Fund thesis: {deal.fund_thesis}
+---
 
-Document excerpts:
-{chunks_text}
+## Executive Summary
 
-Return ONLY valid JSON (no markdown fences):
-{{
-  "mechanism_of_action": "one concise sentence",
-  "clinical_data_summary": "summary of key trial results",
-  "competitive_landscape": "key competitors and differentiation",
-  "unmet_need": "assessment of unmet medical need"
-}}"""
-        max_tokens = 700
-    elif agent_name == "financing_agent":
-        prompt = f"""You are a biopharma investment analyst. Analyse this deal and return a JSON object.
+Axon Therapeutics is raising a $95M Series B to advance AXN-247, a selective CDK4 inhibitor, through its Phase 2b SUMMIT trial in CDK4/6i-pretreated HR+/HER2- advanced breast cancer — a ~180,000 patient/year US market with no approved targeted option. Interim data show a median PFS of 7.4 months versus a 3.8-month historical control on chemotherapy, supporting a differentiated clinical profile. The key investment thesis rests on SUMMIT primary endpoint readout (Q4 2026) as the primary value inflection, with the post-money valuation of $380M reflecting both early clinical promise and the capital intensity ahead of a Phase 3 programme.
 
-Deal: {deal.company_name} | {deal.round_type} | {deal.geography} | {deal.stage}
-Fund thesis: {deal.fund_thesis}
+---
 
-Document excerpts:
-{chunks_text}
+## Company Overview
 
-Return ONLY valid JSON (no markdown fences):
-{{
-  "estimated_raise": "amount and currency",
-  "use_of_proceeds": "brief description",
-  "comparable_financings": "2-3 comparable recent financings",
-  "valuation_considerations": "implied valuation or key drivers"
-}}"""
-        max_tokens = 600
-    else:  # risk_agent
-        prompt = f"""You are a biopharma investment analyst. Analyse this deal and return a JSON object.
+| Field | Value |
+|---|---|
+| Company | Axon Therapeutics |
+| Geography | USA |
+| Stage | Phase 2b |
+| Round | Series B |
 
-Deal: {deal.company_name} | {deal.asset_name} | {deal.indication} | {deal.stage}
+---
 
-Document excerpts:
-{chunks_text}
+## Asset Overview
 
-Return ONLY valid JSON (no markdown fences):
-{{
-  "clinical_risks": ["risk 1", "risk 2", "risk 3"],
-  "regulatory_risks": ["risk 1", "risk 2"],
-  "competitive_risks": ["risk 1", "risk 2"],
-  "financial_risks": ["risk 1", "risk 2"],
-  "diligence_questions": ["question 1", "question 2", "question 3", "question 4", "question 5"]
-}}"""
-        max_tokens = 800
+| Field | Value |
+|---|---|
+| Asset | AXN-247 |
+| Indication | HR+/HER2- advanced breast cancer |
+| Mechanism of Action | Selective CDK4 inhibitor (>50x selectivity over CDK6) that blocks cell cycle progression while preserving T-cell function, enabling combination with immunotherapy and activity in CDK4/6i-resistant tumours. |
+| Unmet Need | ~180,000 US patients/year progress on first-line CDK4/6i with no approved targeted therapy; current standard is chemotherapy with poor outcomes. |
 
-    msg = client.messages.create(
-        model=_MODEL,
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return _parse_json(msg.content[0].text)
+---
 
+## Diligence Summary
 
-def _build_memo_prose(client: anthropic.Anthropic, deal: models.Deal, outputs: dict) -> dict:
-    agent_summary = json.dumps(
-        {k: {ik: iv for ik, iv in v.items() if ik != "citations"} for k, v in outputs.items()},
-        indent=2,
-    )
-    prompt = f"""You are a senior biopharma investment analyst.
+**Clinical Data**
+SUMMIT Phase 2b interim (n=148): median PFS 7.4 months vs 3.8-month historical control on chemotherapy; ORR 28%; Grade 3/4 AEs neutropenia 12%, fatigue 6%, nausea 4%; no treatment-related discontinuations in first 24 weeks.
 
-Deal: {deal.company_name} | {deal.asset_name} | {deal.indication} | {deal.stage} | {deal.round_type}
-Fund thesis: {deal.fund_thesis}
+**Competitive Landscape**
+Approved CDK4/6i (palbociclib, ribociclib, abemaciclib) all lose activity post-progression; AXN-247 differentiates via CDK4 selectivity and CCND1-amplification activity. No approved targeted agent in this post-CDK4/6i setting.
 
-Agent analysis:
-{agent_summary}
+---
 
-Return ONLY valid JSON (no markdown fences):
-{{
-  "executive_summary": "2-3 sentence executive summary of the investment opportunity",
-  "recommendation": "2-3 sentence investment recommendation with rationale and caveats"
-}}"""
+## Financing Considerations
 
-    msg = client.messages.create(
-        model=_MODEL,
-        max_tokens=500,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return _parse_json(msg.content[0].text)
+| Field | Value |
+|---|---|
+| Estimated Raise | $95M |
+| Use of Proceeds | Fund SUMMIT Phase 2b to primary completion (Q4 2026), initiate Phase 3 design, expand IP estate, and build out commercial readiness team. |
+| Comparable Financings | Relay Therapeutics Series C $150M (2021); Blueprint Medicines Series C $100M (2017); Olema Pharmaceuticals $116M Series B (2020, ER+ breast cancer). |
+| Valuation | Post-money $380M. Key inflection: SUMMIT primary endpoint readout Q4 2026. |
+
+---
+
+## Key Risks
+
+**Clinical Risks**
+- SUMMIT primary endpoint may not reach statistical significance if interim PFS benefit is not maintained at final analysis.
+- CDK4/6i-resistant patient population is heterogeneous; biomarker stratification may be needed to identify responders.
+- Neutropenia rate (12% G3/4) could limit dose intensity and complicate combination strategies.
+
+**Regulatory Risks**
+- FDA may require a randomised Phase 3 vs. chemotherapy for accelerated approval given single-arm Phase 2b design.
+- IP landscape for CDK4/6 inhibitors is dense; freedom-to-operate review needed before NDA filing.
+
+**Competitive Risks**
+- Relay Therapeutics RLY-9966 (Phase 1 CDK4-selective inhibitor) could reach Phase 2 readout on a similar timeline.
+- Large pharma CDK4/6i franchises (Pfizer, Lilly) may pursue combination strategies that erode the post-progression market.
+
+**Financial Risks**
+- $95M Series B funds through Phase 2b completion but not Phase 3; a $200M+ Series C will be required before commercialisation.
+- Phase 3 design and scale-up costs are not yet modelled; cost overruns could compress runway.
+
+---
+
+## Diligence Questions
+
+- What is the planned Phase 3 design — randomised vs. chemotherapy, or combination arm with immunotherapy?
+- What biomarker strategy is in place to identify patients most likely to respond to AXN-247 post-CDK4/6i?
+- What is the manufacturing process for AXN-247, and has CMC work been completed to support Phase 3 scale?
+- Has a Freedom-to-Operate analysis been completed against palbociclib, ribociclib, and abemaciclib IP estates?
+- What are the terms of the Novo Holdings lead investment — board seat, pro-rata rights, or follow-on commitment?
+
+---
+
+## Recommendation
+
+AXN-247 presents a compelling opportunity in a validated mechanism with a differentiated clinical profile in a high-unmet-need post-CDK4/6i setting. We recommend progressing to full diligence, contingent on review of the complete SUMMIT data package, CMC status, and Phase 3 design plans; the $380M post-money valuation is reasonable but leaves limited margin if the primary endpoint is borderline.
+
+---
+
+## Source Notes
+
+- [SUMMIT_trial_synopsis.txt · chunk 0] "Interim analysis at 6 months: median PFS 7.4 months (95% CI 5.8-9.1) vs historical control 3.8 months..."
+- [data_room_overview.txt · chunk 0] "Target raise: $95M. Lead investor: Novo Holdings. Co-investors: Versant Ventures, Atlas Venture..."
+- [competitive_landscape.txt · chunk 0] "~180,000 US patients annually progress on first-line CDK4/6i with no approved targeted option..."
+""".strip()
 
 
 def run(db: Session) -> None:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return
-
     if db.query(models.Deal).first():
         return
-
-    client = anthropic.Anthropic(api_key=api_key)
 
     deal = models.Deal(**_DEMO_DEAL)
     db.add(deal)
     db.flush()
 
-    chunks_text = "\n\n---\n\n".join(
-        f"[{c['filename']}]\n{c['text']}" for c in _DEMO_CHUNKS
-    )
-
-    for idx, chunk_data in enumerate(_DEMO_CHUNKS):
+    for chunk_data in _DEMO_CHUNKS:
         doc = models.Document(
             deal_id=deal.id,
             filename=chunk_data["filename"],
@@ -210,127 +238,12 @@ def run(db: Session) -> None:
             )
         )
 
-    agent_outputs: dict = {}
-    for agent_name in ("diligence_agent", "financing_agent", "risk_agent"):
-        parsed = _run_agent(client, deal, agent_name, chunks_text)
-        if agent_name == "diligence_agent":
-            output = {
-                "asset": deal.asset_name or "N/A",
-                "indication": deal.indication or "N/A",
-                "stage": deal.stage or "N/A",
-                **parsed,
-                "citations": [{"filename": c["filename"], "chunk_index": 0, "quote": c["text"][:120]} for c in _DEMO_CHUNKS[:3]],
-            }
-        elif agent_name == "financing_agent":
-            output = {
-                "round_type": deal.round_type or "N/A",
-                "geography": deal.geography or "N/A",
-                **parsed,
-                "citations": [{"filename": c["filename"], "chunk_index": 0, "quote": c["text"][:120]} for c in _DEMO_CHUNKS[:2]],
-            }
-        else:
-            output = {
-                **parsed,
-                "citations": [{"filename": c["filename"], "chunk_index": 0, "quote": c["text"][:120]} for c in _DEMO_CHUNKS[:2]],
-            }
-        agent_outputs[agent_name] = output
-        db.add(models.AgentOutput(deal_id=deal.id, agent_name=agent_name, output_json=json.dumps(output, indent=2)))
+    for name, output in [
+        ("diligence_agent", _DILIGENCE_OUTPUT),
+        ("financing_agent", _FINANCING_OUTPUT),
+        ("risk_agent", _RISK_OUTPUT),
+    ]:
+        db.add(models.AgentOutput(deal_id=deal.id, agent_name=name, output_json=json.dumps(output, indent=2)))
 
-    prose = _build_memo_prose(client, deal, agent_outputs)
-    d = agent_outputs.get("diligence_agent", {})
-    f = agent_outputs.get("financing_agent", {})
-    r = agent_outputs.get("risk_agent", {})
-
-    def bullet_list(items):
-        return "\n".join(f"- {item}" for item in items) if items else "- N/A"
-
-    markdown = f"""# Investment Memo: {deal.company_name}
-
----
-
-## Executive Summary
-
-{prose.get("executive_summary", deal.fund_thesis)}
-
----
-
-## Company Overview
-
-| Field | Value |
-|---|---|
-| Company | {deal.company_name} |
-| Geography | {deal.geography or "N/A"} |
-| Stage | {deal.stage or "N/A"} |
-| Round | {deal.round_type or "N/A"} |
-
----
-
-## Asset Overview
-
-| Field | Value |
-|---|---|
-| Asset | {d.get("asset", "N/A")} |
-| Indication | {d.get("indication", "N/A")} |
-| Mechanism of Action | {d.get("mechanism_of_action", "N/A")} |
-| Unmet Need | {d.get("unmet_need", "N/A")} |
-
----
-
-## Diligence Summary
-
-**Clinical Data**
-{d.get("clinical_data_summary", "N/A")}
-
-**Competitive Landscape**
-{d.get("competitive_landscape", "N/A")}
-
----
-
-## Financing Considerations
-
-| Field | Value |
-|---|---|
-| Estimated Raise | {f.get("estimated_raise", "N/A")} |
-| Use of Proceeds | {f.get("use_of_proceeds", "N/A")} |
-| Comparable Financings | {f.get("comparable_financings", "N/A")} |
-| Valuation | {f.get("valuation_considerations", "N/A")} |
-
----
-
-## Key Risks
-
-**Clinical Risks**
-{bullet_list(r.get("clinical_risks", []))}
-
-**Regulatory Risks**
-{bullet_list(r.get("regulatory_risks", []))}
-
-**Competitive Risks**
-{bullet_list(r.get("competitive_risks", []))}
-
-**Financial Risks**
-{bullet_list(r.get("financial_risks", []))}
-
----
-
-## Diligence Questions
-
-{bullet_list(r.get("diligence_questions", []))}
-
----
-
-## Recommendation
-
-{prose.get("recommendation", "N/A")}
-
----
-
-## Source Notes
-
-- [SUMMIT_trial_synopsis.txt · chunk 0] "{_DEMO_CHUNKS[0]["text"][:120]}..."
-- [data_room_overview.txt · chunk 0] "{_DEMO_CHUNKS[1]["text"][:120]}..."
-- [competitive_landscape.txt · chunk 0] "{_DEMO_CHUNKS[2]["text"][:120]}..."
-""".strip()
-
-    db.add(models.Memo(deal_id=deal.id, markdown=markdown))
+    db.add(models.Memo(deal_id=deal.id, markdown=_MEMO_MARKDOWN))
     db.commit()
