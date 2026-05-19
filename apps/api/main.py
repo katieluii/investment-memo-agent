@@ -1,12 +1,26 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import Base, engine
+import seed_demo
+from database import Base, SessionLocal, engine
 from routers import agents, deals, documents, memo
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Investment Memo API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db = SessionLocal()
+    try:
+        seed_demo.run(db)
+    finally:
+        db.close()
+    yield
+
+
+app = FastAPI(title="Investment Memo API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
