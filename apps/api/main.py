@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import seed_demo
 from database import Base, SessionLocal, engine
-from routers import agents, deals, documents, memo
+from routers import agents, deals, documents, feedback, memo
 
 Base.metadata.create_all(bind=engine)
 
@@ -34,6 +34,7 @@ app.add_middleware(
 app.include_router(deals.router)
 app.include_router(documents.router)
 app.include_router(agents.router)
+app.include_router(feedback.router)
 app.include_router(memo.router)
 
 

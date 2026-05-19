@@ -26,6 +26,7 @@ class Deal(Base):
     chunks = relationship("DocumentChunk", back_populates="deal", cascade="all, delete-orphan")
     agent_outputs = relationship("AgentOutput", back_populates="deal", cascade="all, delete-orphan")
     memos = relationship("Memo", back_populates="deal", cascade="all, delete-orphan")
+    feedback = relationship("AgentFeedback", back_populates="deal", cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -78,3 +79,15 @@ class Memo(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     deal = relationship("Deal", back_populates="memos")
+
+
+class AgentFeedback(Base):
+    __tablename__ = "agent_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    deal_id = Column(Integer, ForeignKey("deals.id"), nullable=False)
+    agent_name = Column(String, nullable=False)
+    feedback_text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    deal = relationship("Deal", back_populates="feedback")

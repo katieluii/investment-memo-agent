@@ -61,3 +61,18 @@ class MemoOut(BaseModel):
     deal_id: int
     markdown: str
     created_at: datetime
+
+
+class AgentFeedbackCreate(BaseModel):
+    agent_name: str
+    feedback_text: str
+
+
+class AgentFeedbackOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    deal_id: int
+    agent_name: str
+    feedback_text: str
+    created_at: datetime

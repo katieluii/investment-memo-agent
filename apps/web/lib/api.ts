@@ -114,6 +114,28 @@ export function getAgentOutputs(dealId: number): Promise<AgentOutput[]> {
   return apiFetch(`/deals/${dealId}/agent-outputs`);
 }
 
+// ── Feedback ─────────────────────────────────────────────────────────────────
+
+export interface AgentFeedback {
+  id: number;
+  deal_id: number;
+  agent_name: string;
+  feedback_text: string;
+  created_at: string;
+}
+
+export function getFeedback(dealId: number): Promise<AgentFeedback[]> {
+  return apiFetch(`/deals/${dealId}/feedback`);
+}
+
+export function saveFeedback(dealId: number, agent_name: string, feedback_text: string): Promise<AgentFeedback> {
+  return apiFetch(`/deals/${dealId}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent_name, feedback_text }),
+  });
+}
+
 // ── Memo ─────────────────────────────────────────────────────────────────────
 
 export function generateMemo(dealId: number): Promise<Memo> {
