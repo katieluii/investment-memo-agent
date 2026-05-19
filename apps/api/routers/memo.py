@@ -1,5 +1,8 @@
 import json
+import os
+import re
 
+import anthropic
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -8,6 +11,9 @@ import schemas
 from database import get_db
 
 router = APIRouter(prefix="/deals", tags=["memo"])
+
+_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+_MODEL = "claude-haiku-4-5-20251001"
 
 
 def _latest_outputs_by_agent(agent_outputs: list) -> dict:
@@ -18,8 +24,18 @@ def _latest_outputs_by_agent(agent_outputs: list) -> dict:
     return seen
 
 
+def _parse_json(raw: str) -> dict:
+    raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            return json.loads(m.group())
+        return {}
+
+
 def _build_memo(deal: models.Deal, agent_outputs: list) -> str:
-    # TODO: replace with real LLM call for full prose generation
     by_agent = _latest_outputs_by_agent(agent_outputs)
 
     d = by_agent.get("diligence_agent", {})
@@ -30,11 +46,48 @@ def _build_memo(deal: models.Deal, agent_outputs: list) -> str:
         return "\n".join(f"- {item}" for item in items) if items else "- N/A"
 
     all_citations = d.get("citations", []) + f.get("citations", []) + r.get("citations", [])
-    # TODO: add citation verification against source documents
     source_notes = "\n".join(
         f"- [{c.get('filename', '?')} · chunk {c.get('chunk_index', '?')}] \"{c.get('quote', '')}\""
         for c in all_citations
     ) or "No sources indexed."
+
+    agent_summary = json.dumps(
+        {
+            "diligence": {k: v for k, v in d.items() if k != "citations"},
+            "financing": {k: v for k, v in f.items() if k != "citations"},
+            "risks": {k: v for k, v in r.items() if k != "citations"},
+        },
+        indent=2,
+    )
+
+    prompt = f"""You are a senior biopharma investment analyst writing an investment memo.
+
+Deal:
+- Company: {deal.company_name}
+- Asset: {deal.asset_name or "Not specified"}
+- Indication: {deal.indication or "Not specified"}
+- Stage: {deal.stage or "Not specified"}
+- Round: {deal.round_type or "Not specified"}
+- Fund thesis: {deal.fund_thesis or "Not specified"}
+
+Agent analysis:
+{agent_summary}
+
+Return ONLY valid JSON (no markdown fences) with exactly these two keys:
+{{
+  "executive_summary": "2-3 sentence executive summary of the investment opportunity",
+  "recommendation": "2-3 sentence investment recommendation with key supporting rationale and caveats"
+}}"""
+
+    msg = _client.messages.create(
+        model=_MODEL,
+        max_tokens=500,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    prose = _parse_json(msg.content[0].text)
+
+    exec_summary = prose.get("executive_summary") or deal.fund_thesis or "N/A"
+    recommendation = prose.get("recommendation") or "N/A"
 
     memo = f"""# Investment Memo: {deal.company_name}
 
@@ -42,7 +95,7 @@ def _build_memo(deal: models.Deal, agent_outputs: list) -> str:
 
 ## Executive Summary
 
-{deal.fund_thesis or "[TODO: generate executive summary from agent outputs and fund thesis]"}
+{exec_summary}
 
 ---
 
@@ -113,17 +166,13 @@ def _build_memo(deal: models.Deal, agent_outputs: list) -> str:
 
 ## Recommendation
 
-[TODO: generate recommendation from agent outputs]
+{recommendation}
 
 ---
 
 ## Source Notes
 
 {source_notes}
-
-<!-- TODO: DOCX/PDF export -->
-<!-- TODO: workflow orchestration (LangGraph or similar) -->
-<!-- TODO: embeddings/RAG for semantic retrieval -->
 """
     return memo.strip()
 

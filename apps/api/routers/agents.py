@@ -1,5 +1,8 @@
 import json
+import os
+import re
 
+import anthropic
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
@@ -8,6 +11,9 @@ import schemas
 from database import get_db
 
 router = APIRouter(prefix="/deals", tags=["agents"])
+
+_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+_MODEL = "claude-haiku-4-5-20251001"
 
 
 def _preview(text: str, max_chars: int = 120) -> str:
@@ -25,44 +31,142 @@ def _citations(chunks: list, n: int = 3) -> list:
     ]
 
 
+def _chunk_context(chunks: list) -> str:
+    parts = []
+    for c in chunks:
+        filename = c.document.filename if c.document else "unknown"
+        parts.append(f"[{filename} · chunk {c.chunk_index}]\n{c.chunk_text}")
+    return "\n\n---\n\n".join(parts)
+
+
+def _parse_json(raw: str) -> dict:
+    raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            return json.loads(m.group())
+        return {}
+
+
 def _diligence_agent(deal: models.Deal, chunks: list) -> dict:
-    # TODO: replace with real LLM call — pass deal fields + chunk texts as context
+    context = _chunk_context(chunks)
+    prompt = f"""You are a biopharma investment analyst. Analyse this deal and the document excerpts below, then return a JSON object.
+
+Deal:
+- Company: {deal.company_name}
+- Asset: {deal.asset_name or "Not specified"}
+- Indication: {deal.indication or "Not specified"}
+- Stage: {deal.stage or "Not specified"}
+- Investment thesis: {deal.fund_thesis or "Not specified"}
+
+Document excerpts:
+{context if context else "No documents uploaded — base your analysis on the deal fields above."}
+
+Return ONLY valid JSON (no markdown fences) with this exact structure:
+{{
+  "mechanism_of_action": "one concise sentence describing how the asset works",
+  "clinical_data_summary": "summary of key trial results and efficacy/safety data points",
+  "competitive_landscape": "key competitors and how this asset differentiates",
+  "unmet_need": "assessment of unmet medical need in this indication"
+}}"""
+
+    msg = _client.messages.create(
+        model=_MODEL,
+        max_tokens=700,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    parsed = _parse_json(msg.content[0].text)
+
     return {
         "asset": deal.asset_name or "N/A",
         "indication": deal.indication or "N/A",
         "stage": deal.stage or "N/A",
-        "mechanism_of_action": "[TODO: extract from uploaded documents]",
-        "clinical_data_summary": "[TODO: summarise trial results from documents]",
-        "competitive_landscape": "[TODO: identify key competitors and differentiation]",
-        "unmet_need": "[TODO: assess unmet medical need from documents]",
+        "mechanism_of_action": parsed.get("mechanism_of_action", "N/A"),
+        "clinical_data_summary": parsed.get("clinical_data_summary", "N/A"),
+        "competitive_landscape": parsed.get("competitive_landscape", "N/A"),
+        "unmet_need": parsed.get("unmet_need", "N/A"),
         "citations": _citations(chunks, 3),
     }
 
 
 def _financing_agent(deal: models.Deal, chunks: list) -> dict:
-    # TODO: replace with real LLM call
+    context = _chunk_context(chunks)
+    prompt = f"""You are a biopharma investment analyst. Analyse this deal and document excerpts below, then return a JSON object.
+
+Deal:
+- Company: {deal.company_name}
+- Round type: {deal.round_type or "Not specified"}
+- Geography: {deal.geography or "Not specified"}
+- Stage: {deal.stage or "Not specified"}
+- Investment thesis: {deal.fund_thesis or "Not specified"}
+
+Document excerpts:
+{context if context else "No documents uploaded — base your analysis on the deal fields above."}
+
+Return ONLY valid JSON (no markdown fences) with this exact structure:
+{{
+  "estimated_raise": "amount and currency if discernible, else 'Not disclosed'",
+  "use_of_proceeds": "brief description of intended use of funds",
+  "comparable_financings": "2-3 comparable recent biopharma financings at this stage/indication",
+  "valuation_considerations": "implied valuation or key valuation drivers"
+}}"""
+
+    msg = _client.messages.create(
+        model=_MODEL,
+        max_tokens=600,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    parsed = _parse_json(msg.content[0].text)
+
     return {
         "round_type": deal.round_type or "N/A",
         "geography": deal.geography or "N/A",
-        "estimated_raise": "[TODO: extract raise amount from documents]",
-        "use_of_proceeds": "[TODO: extract use of proceeds from documents]",
-        "comparable_financings": "[TODO: identify comparable recent financings]",
-        "valuation_considerations": "[TODO: derive implied valuation from documents]",
+        "estimated_raise": parsed.get("estimated_raise", "N/A"),
+        "use_of_proceeds": parsed.get("use_of_proceeds", "N/A"),
+        "comparable_financings": parsed.get("comparable_financings", "N/A"),
+        "valuation_considerations": parsed.get("valuation_considerations", "N/A"),
         "citations": _citations(chunks, 2),
     }
 
 
 def _risk_agent(deal: models.Deal, chunks: list) -> dict:
-    # TODO: replace with real LLM call
+    context = _chunk_context(chunks)
+    prompt = f"""You are a biopharma investment analyst. Analyse this deal and document excerpts below, then return a JSON object.
+
+Deal:
+- Company: {deal.company_name}
+- Asset: {deal.asset_name or "Not specified"}
+- Indication: {deal.indication or "Not specified"}
+- Stage: {deal.stage or "Not specified"}
+- Round: {deal.round_type or "Not specified"}
+
+Document excerpts:
+{context if context else "No documents uploaded — base your analysis on the deal fields above."}
+
+Return ONLY valid JSON (no markdown fences) with this exact structure:
+{{
+  "clinical_risks": ["risk 1", "risk 2", "risk 3"],
+  "regulatory_risks": ["risk 1", "risk 2"],
+  "competitive_risks": ["risk 1", "risk 2"],
+  "financial_risks": ["risk 1", "risk 2"],
+  "diligence_questions": ["question 1", "question 2", "question 3", "question 4", "question 5"]
+}}"""
+
+    msg = _client.messages.create(
+        model=_MODEL,
+        max_tokens=800,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    parsed = _parse_json(msg.content[0].text)
+
     return {
-        "clinical_risks": ["[TODO: identify from documents]"],
-        "regulatory_risks": ["[TODO: identify from documents]"],
-        "competitive_risks": ["[TODO: identify from documents]"],
-        "financial_risks": ["[TODO: identify from documents]"],
-        "diligence_questions": [
-            "[TODO: generate targeted diligence questions from documents]",
-            "[TODO: generate targeted diligence questions from documents]",
-        ],
+        "clinical_risks": parsed.get("clinical_risks", ["N/A"]),
+        "regulatory_risks": parsed.get("regulatory_risks", ["N/A"]),
+        "competitive_risks": parsed.get("competitive_risks", ["N/A"]),
+        "financial_risks": parsed.get("financial_risks", ["N/A"]),
+        "diligence_questions": parsed.get("diligence_questions", ["N/A"]),
         "citations": _citations(chunks, 2),
     }
 
@@ -85,7 +189,7 @@ def run_agents(deal_id: int, db: Session = Depends(get_db)):
         .options(joinedload(models.DocumentChunk.document))
         .filter(models.DocumentChunk.deal_id == deal_id)
         .order_by(models.DocumentChunk.chunk_index)
-        .limit(5)
+        .limit(10)
         .all()
     )
 
