@@ -50,7 +50,45 @@ def _bullet(items: list) -> str:
     return "\n".join(f"- {item}" for item in items) if items else "- N/A"
 
 
-def _build_memo(deal: models.Deal, agent_outputs: list, feedback_entries: list) -> str:
+_RATING_LABELS = {
+    "conviction": "Conviction & Commitment",
+    "expertise": "Scientific / Domain Expertise",
+    "execution": "Execution Track Record",
+    "vision": "Strategic Clarity",
+    "team": "Team Cohesion",
+    "coachability": "Openness to Input",
+}
+
+_SCORE_LABELS = {1: "Unclear", 2: "Developing", 3: "Adequate", 4: "Strong", 5: "Exceptional"}
+
+
+def _founder_insights_section(fi: models.FounderInsights) -> str:
+    if not fi:
+        return ""
+    lines = ["## Founding Team Assessment\n"]
+    if fi.ratings_json:
+        try:
+            ratings = json.loads(fi.ratings_json)
+            for key, label in _RATING_LABELS.items():
+                r = ratings.get(key, {})
+                score = r.get("score")
+                notes = r.get("notes", "").strip()
+                if score or notes:
+                    score_str = f"{_SCORE_LABELS.get(score, score)}" if score else ""
+                    lines.append(f"**{label}**" + (f" — {score_str}" if score_str else ""))
+                    if notes:
+                        lines.append(notes)
+                    lines.append("")
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    if fi.key_impressions and fi.key_impressions.strip():
+        lines.append(f"**Key Impressions**\n{fi.key_impressions.strip()}\n")
+    if fi.meeting_notes and fi.meeting_notes.strip():
+        lines.append(f"**Meeting Notes**\n{fi.meeting_notes.strip()}\n")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
+def _build_memo(deal: models.Deal, agent_outputs: list, feedback_entries: list, founder_insights: models.FounderInsights = None) -> str:
     by_agent = _latest_outputs_by_agent(agent_outputs)
     by_feedback = _latest_feedback_by_agent(feedback_entries)
 
@@ -68,6 +106,17 @@ def _build_memo(deal: models.Deal, agent_outputs: list, feedback_entries: list) 
     ]:
         if key in by_feedback:
             feedback_block += f"\n{agent_label} notes from analyst: {by_feedback[key]}"
+
+    if founder_insights and founder_insights.ratings_json:
+        try:
+            ratings = json.loads(founder_insights.ratings_json)
+            scored = [f"{_RATING_LABELS.get(k, k)}: {r.get('score')}/5" for k, r in ratings.items() if r.get("score")]
+            if scored:
+                feedback_block += f"\nFounding team assessment: {', '.join(scored)}"
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    if founder_insights and founder_insights.key_impressions:
+        feedback_block += f"\nKey team impressions: {founder_insights.key_impressions}"
 
     agent_summary = json.dumps(
         {k: {ik: iv for ik, iv in v.items() if ik != "citations"} for k, v in by_agent.items()},
@@ -124,6 +173,8 @@ Return ONLY valid JSON (no markdown fences):
     ]:
         if key in by_feedback:
             analyst_notes_section += f"\n**{label}**\n{by_feedback[key]}\n"
+
+    fi_section = _founder_insights_section(founder_insights)
 
     memo = f"""# Investment Memo: {deal.company_name}
 
@@ -223,6 +274,10 @@ Return ONLY valid JSON (no markdown fences):
 {f'''
 ---
 
+{fi_section}''' if fi_section else ''}
+{f'''
+---
+
 ## Analyst Notes
 
 {analyst_notes_section.strip()}''' if analyst_notes_section.strip() else ''}
@@ -258,7 +313,9 @@ def generate_memo(deal_id: int, db: Session = Depends(get_db)):
         .all()
     )
 
-    markdown = _build_memo(deal, agent_outputs, feedback_entries)
+    fi = db.query(models.FounderInsights).filter(models.FounderInsights.deal_id == deal_id).first()
+
+    markdown = _build_memo(deal, agent_outputs, feedback_entries, fi)
     memo = models.Memo(deal_id=deal_id, markdown=markdown)
     db.add(memo)
     db.commit()

@@ -27,6 +27,7 @@ class Deal(Base):
     agent_outputs = relationship("AgentOutput", back_populates="deal", cascade="all, delete-orphan")
     memos = relationship("Memo", back_populates="deal", cascade="all, delete-orphan")
     feedback = relationship("AgentFeedback", back_populates="deal", cascade="all, delete-orphan")
+    founder_insights = relationship("FounderInsights", back_populates="deal", uselist=False, cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -79,6 +80,20 @@ class Memo(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     deal = relationship("Deal", back_populates="memos")
+
+
+class FounderInsights(Base):
+    __tablename__ = "founder_insights"
+
+    id = Column(Integer, primary_key=True, index=True)
+    deal_id = Column(Integer, ForeignKey("deals.id"), unique=True, nullable=False)
+    meeting_notes = Column(Text)
+    key_impressions = Column(Text)
+    ratings_json = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    deal = relationship("Deal", back_populates="founder_insights")
 
 
 class AgentFeedback(Base):

@@ -63,6 +63,24 @@ class MemoOut(BaseModel):
     created_at: datetime
 
 
+class FounderInsightsCreate(BaseModel):
+    meeting_notes: Optional[str] = None
+    key_impressions: Optional[str] = None
+    ratings_json: Optional[str] = None
+
+
+class FounderInsightsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    deal_id: int
+    meeting_notes: Optional[str]
+    key_impressions: Optional[str]
+    ratings_json: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+
 class AgentFeedbackCreate(BaseModel):
     agent_name: str
     feedback_text: str

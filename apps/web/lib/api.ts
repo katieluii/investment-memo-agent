@@ -114,6 +114,36 @@ export function getAgentOutputs(dealId: number): Promise<AgentOutput[]> {
   return apiFetch(`/deals/${dealId}/agent-outputs`);
 }
 
+// ── Founder Insights ─────────────────────────────────────────────────────────
+
+export interface FounderInsights {
+  id: number;
+  deal_id: number;
+  meeting_notes?: string;
+  key_impressions?: string;
+  ratings_json?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FounderInsightsCreate {
+  meeting_notes?: string;
+  key_impressions?: string;
+  ratings_json?: string;
+}
+
+export function getFounderInsights(dealId: number): Promise<FounderInsights> {
+  return apiFetch(`/deals/${dealId}/founder-insights`);
+}
+
+export function saveFounderInsights(dealId: number, data: FounderInsightsCreate): Promise<FounderInsights> {
+  return apiFetch(`/deals/${dealId}/founder-insights`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
 // ── Feedback ─────────────────────────────────────────────────────────────────
 
 export interface AgentFeedback {

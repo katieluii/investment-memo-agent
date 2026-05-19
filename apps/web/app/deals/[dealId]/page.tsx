@@ -136,9 +136,10 @@ export default function DealPage() {
             </div>
           )}
 
-          <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
+          <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem", flexWrap: "wrap" }}>
             <Link href={`/deals/${id}/documents`}><button>Documents →</button></Link>
-            <Link href={`/deals/${id}/review`}><button>Review →</button></Link>
+            <Link href={`/deals/${id}/founder-insights`}><button>Team Assessment →</button></Link>
+            <Link href={`/deals/${id}/review`}><button>Agent Review →</button></Link>
             <Link href={`/deals/${id}/memo`}><button>Memo →</button></Link>
           </div>
         </>
