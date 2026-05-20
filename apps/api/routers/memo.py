@@ -4,8 +4,6 @@ import os
 import re
 
 import anthropic
-from docx import Document
-from docx.shared import Inches, Pt
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -336,6 +334,8 @@ def _add_runs(paragraph, text: str) -> None:
 
 
 def _markdown_to_docx(markdown: str, company_name: str) -> bytes:
+    from docx import Document
+    from docx.shared import Inches
     doc = Document()
     for section in doc.sections:
         section.top_margin = Inches(1)
