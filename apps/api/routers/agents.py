@@ -15,9 +15,6 @@ router = APIRouter(prefix="/deals", tags=["agents"])
 
 _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 _MODEL = "claude-haiku-4-5-20251001"
-_FALLBACK = "claude-sonnet-4-6"
-# Limit to 2 searches per agent — reduces cost and latency significantly
-_SEARCH_TOOL = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 2}]
 
 
 def _preview(text: str, max_chars: int = 120) -> str:
@@ -58,30 +55,17 @@ def _parse_json(raw: str) -> dict:
 
 
 def _call_claude(prompt: str, max_tokens: int = 1500) -> str:
-    """Try Haiku with web search, fall back to Sonnet without search on failure."""
-    try:
-        response = _client.messages.create(
-            model=_MODEL,
-            max_tokens=max_tokens,
-            tools=_SEARCH_TOOL,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return "".join(b.text for b in response.content if hasattr(b, "text") and b.type == "text")
-    except Exception:
-        # Fall back to Sonnet without web search
-        response = _client.messages.create(
-            model=_FALLBACK,
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return "".join(b.text for b in response.content if hasattr(b, "text"))
+    response = _client.messages.create(
+        model=_MODEL,
+        max_tokens=max_tokens,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return "".join(b.text for b in response.content if hasattr(b, "text"))
 
 
 def _scientific_diligence(deal: models.Deal, chunks: list) -> dict:
     context = _chunk_context(chunks)
     prompt = f"""You are a scientific diligence analyst at a biotech VC fund. Assess the scientific and clinical merit of this deal.
-
-Search for: recent clinical results for {deal.asset_name or deal.company_name} in {deal.indication or "this indication"}, key scientific debates around this mechanism.
 
 Deal: {deal.company_name} | {deal.asset_name or "N/A"} | {deal.indication or "N/A"} | {deal.stage or "N/A"}
 Fund thesis: {deal.fund_thesis or "Not specified"}
@@ -113,8 +97,6 @@ def _competitive_intelligence(deal: models.Deal, chunks: list) -> dict:
     context = _chunk_context(chunks)
     prompt = f"""You are a competitive intelligence analyst at a biotech VC fund.
 
-Search for: all drugs approved or in development for {deal.indication or "this indication"}, recent approvals and market size data.
-
 Deal: {deal.company_name} | {deal.asset_name or "N/A"} | {deal.indication or "N/A"} | {deal.stage or "N/A"}
 Fund thesis: {deal.fund_thesis or "Not specified"}
 
@@ -145,8 +127,6 @@ def _clinical_regulatory(deal: models.Deal, chunks: list) -> dict:
     context = _chunk_context(chunks)
     prompt = f"""You are a clinical and regulatory strategy analyst at a biotech VC fund.
 
-Search for: FDA/EMA regulatory precedent for {deal.indication or "this indication"}, recent approvals, breakthrough designations, or CRLs in this space.
-
 Deal: {deal.company_name} | {deal.asset_name or "N/A"} | {deal.indication or "N/A"} | {deal.stage or "N/A"}
 Fund thesis: {deal.fund_thesis or "Not specified"}
 
@@ -176,8 +156,6 @@ Return ONLY valid JSON (no markdown fences), one short sentence per list item:
 def _financing_valuation(deal: models.Deal, chunks: list) -> dict:
     context = _chunk_context(chunks)
     prompt = f"""You are a financing and valuation analyst at a biotech VC fund.
-
-Search for: recent {deal.stage or "similar stage"} biotech financings in {deal.indication or "this indication"}, comparable M&A transactions.
 
 Deal: {deal.company_name} | {deal.round_type or "N/A"} | {deal.stage or "N/A"}
 Fund thesis: {deal.fund_thesis or "Not specified"}
