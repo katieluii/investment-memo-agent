@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Memo, generateMemo, getMemo } from "../../../../lib/api";
+import { Memo, generateMemo, getMemo, getMemoExportUrl } from "../../../../lib/api";
 
 export default function MemoPage() {
   const { dealId } = useParams<{ dealId: string }>();
@@ -39,7 +39,7 @@ export default function MemoPage() {
       </p>
       <h1>Investment Memo</h1>
 
-      <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
         <button onClick={handleGenerate} disabled={generating}>
           {generating ? "Generating..." : "Generate Memo"}
         </button>
@@ -49,6 +49,11 @@ export default function MemoPage() {
         >
           Fetch Existing
         </button>
+        {memo && (
+          <a href={getMemoExportUrl(id)} download>
+            <button>Export to Word ↓</button>
+          </a>
+        )}
       </div>
 
       {error && <p style={{ color: "red" }}>{error}</p>}

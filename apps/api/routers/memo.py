@@ -1,9 +1,13 @@
+import io
 import json
 import os
 import re
 
 import anthropic
+from docx import Document
+from docx.shared import Inches, Pt
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 import models
@@ -321,6 +325,95 @@ def generate_memo(deal_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(memo)
     return memo
+
+
+def _add_runs(paragraph, text: str) -> None:
+    for part in re.split(r"(\*\*[^*]+\*\*)", text):
+        if part.startswith("**") and part.endswith("**"):
+            paragraph.add_run(part[2:-2]).bold = True
+        elif part:
+            paragraph.add_run(part)
+
+
+def _markdown_to_docx(markdown: str, company_name: str) -> bytes:
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1.25)
+        section.right_margin = Inches(1.25)
+
+    lines = markdown.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i].rstrip()
+
+        if line.startswith("# "):
+            doc.add_heading(line[2:], level=1)
+        elif line.startswith("## "):
+            doc.add_heading(line[3:], level=2)
+        elif line.startswith("### "):
+            doc.add_heading(line[4:], level=3)
+        elif line.startswith("- "):
+            p = doc.add_paragraph(style="List Bullet")
+            _add_runs(p, line[2:])
+        elif line.startswith("| "):
+            table_lines = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                if not re.match(r"^\|[-| :]+\|$", lines[i].strip()):
+                    table_lines.append(lines[i])
+                i += 1
+            if table_lines:
+                headers = [c.strip() for c in table_lines[0].split("|")[1:-1]]
+                data_rows = [
+                    [c.strip() for c in r.split("|")[1:-1]]
+                    for r in table_lines[1:]
+                ]
+                tbl = doc.add_table(rows=1 + len(data_rows), cols=len(headers))
+                tbl.style = "Table Grid"
+                for j, h in enumerate(headers):
+                    tbl.rows[0].cells[j].text = h
+                for ri, row in enumerate(data_rows):
+                    for ci, val in enumerate(row):
+                        if ci < len(tbl.rows[ri + 1].cells):
+                            tbl.rows[ri + 1].cells[ci].text = val
+                doc.add_paragraph()
+            continue
+        elif line == "---":
+            doc.add_paragraph()
+        elif line.strip():
+            p = doc.add_paragraph()
+            _add_runs(p, line)
+
+        i += 1
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+@router.get("/{deal_id}/memo/export")
+def export_memo_docx(deal_id: int, db: Session = Depends(get_db)):
+    deal = db.query(models.Deal).filter(models.Deal.id == deal_id).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    memo = (
+        db.query(models.Memo)
+        .filter(models.Memo.deal_id == deal_id)
+        .order_by(models.Memo.created_at.desc())
+        .first()
+    )
+    if not memo:
+        raise HTTPException(status_code=404, detail="No memo generated yet")
+
+    docx_bytes = _markdown_to_docx(memo.markdown, deal.company_name)
+    filename = f"{deal.company_name.replace(' ', '_')}_Investment_Memo.docx"
+    return Response(
+        content=docx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{deal_id}/memo", response_model=schemas.MemoOut)

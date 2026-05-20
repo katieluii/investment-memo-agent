@@ -188,3 +188,8 @@ export function generateMemo(dealId: number): Promise<Memo> {
 export function getMemo(dealId: number): Promise<Memo> {
   return apiFetch(`/deals/${dealId}/memo`);
 }
+
+export function getMemoExportUrl(dealId: number): string {
+  const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  return `${base}/deals/${dealId}/memo/export`;
+}
