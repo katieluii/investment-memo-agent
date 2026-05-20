@@ -50,9 +50,18 @@ export default function MemoPage() {
           Fetch Existing
         </button>
         {memo && (
-          <a href={getMemoExportUrl(id)} download>
-            <button>Export to Word ↓</button>
-          </a>
+          <button onClick={async () => {
+            const res = await fetch(getMemoExportUrl(id));
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "Investment_Memo.docx";
+            a.click();
+            URL.revokeObjectURL(url);
+          }}>
+            Export to Word ↓
+          </button>
         )}
       </div>
 
