@@ -51,14 +51,26 @@ export default function MemoPage() {
         </button>
         {memo && (
           <button onClick={async () => {
-            const res = await fetch(getMemoExportUrl(id));
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "Investment_Memo.docx";
-            a.click();
-            URL.revokeObjectURL(url);
+            try {
+              const res = await fetch(getMemoExportUrl(id));
+              if (!res.ok) {
+                const msg = await res.text().catch(() => res.statusText);
+                setError(`Export failed: ${msg}`);
+                return;
+              }
+              const blob = await res.blob();
+              const disposition = res.headers.get("Content-Disposition") ?? "";
+              const match = disposition.match(/filename="([^"]+)"/);
+              const filename = match?.[1] ?? "Investment_Memo.docx";
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = filename;
+              a.click();
+              URL.revokeObjectURL(url);
+            } catch (e: unknown) {
+              setError(e instanceof Error ? e.message : "Export failed");
+            }
           }}>
             Export to Word ↓
           </button>
