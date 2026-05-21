@@ -98,7 +98,7 @@ apps/
 ```bash
 cd apps/api
 pip install -r requirements.txt
-ANTHROPIC_API_KEY=sk-ant-... uvicorn main:app --reload
+ANTHROPIC_API_KEY=your-anthropic-api-key-here uvicorn main:app --reload
 ```
 
 **Frontend**
@@ -119,7 +119,7 @@ npm run dev
 
 1. Connect `katieluii/investment-memo-agent` GitHub repo to Railway
 2. Railway uses the root `Procfile`: `web: sh -c 'cd apps/api && uvicorn main:app --host 0.0.0.0 --port $PORT'`
-3. Set environment variable: `ANTHROPIC_API_KEY=sk-ant-...`
+3. Set environment variable: `ANTHROPIC_API_KEY=your-anthropic-api-key-here`
 4. On cold start, `seed_demo.py` auto-populates a demo deal (Axon Therapeutics, Phase 2b breast cancer)
 
 > SQLite uses ephemeral storage on Railway — the DB resets on each redeploy. Add a Railway Volume mounted at `/app/apps/api` for persistence.
