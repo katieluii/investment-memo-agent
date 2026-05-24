@@ -136,11 +136,22 @@ export default function DealPage() {
             </div>
           )}
 
-          <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem", flexWrap: "wrap" }}>
-            <Link href={`/deals/${id}/documents`}><button>Documents →</button></Link>
-            <Link href={`/deals/${id}/founder-insights`}><button>Team Assessment →</button></Link>
-            <Link href={`/deals/${id}/review`}><button>Agent Review →</button></Link>
-            <Link href={`/deals/${id}/memo`}><button>Memo →</button></Link>
+          <div style={{ marginTop: "1.5rem", overflowX: "auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: "max-content" }}>
+              {[
+                { label: "Documents →",       href: `/deals/${id}/documents` },
+                { label: "Market Sizing →",   href: `/deals/${id}/market-sizing` },
+                { label: "Cap Table →",       href: `/deals/${id}/cap-table` },
+                { label: "Exit Scenarios →",  href: `/deals/${id}/exit-scenarios` },
+                { label: "Team Assessment →", href: `/deals/${id}/founder-insights` },
+                { label: "DD Agents →",       href: `/deals/${id}/review` },
+                { label: "Memo →",            href: `/deals/${id}/memo` },
+              ].map((step) => (
+                <Link key={step.label} href={step.href}>
+                  <button>{step.label}</button>
+                </Link>
+              ))}
+            </div>
           </div>
         </>
       )}

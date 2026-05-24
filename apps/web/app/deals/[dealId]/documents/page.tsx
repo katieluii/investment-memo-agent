@@ -101,6 +101,20 @@ export default function DocumentsPage() {
       <button onClick={handleIndex} disabled={indexing || docs.length === 0}>
         {indexing ? "Indexing..." : "Index Documents"}
       </button>
+
+      <hr style={{ margin: "2rem 0", borderColor: "#ddd" }} />
+
+      <h2 style={{ fontSize: "0.85em", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+        Analysis Tools
+      </h2>
+      <p style={{ color: "#666", fontSize: "0.9em", marginBottom: "1rem" }}>
+        Run deal-specific analysis alongside your documents. Cap table data can be imported from a CSV on the next page.
+      </p>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <Link href={`/deals/${id}/market-sizing`}><button>Market Sizing →</button></Link>
+        <Link href={`/deals/${id}/cap-table`}><button>Cap Table →</button></Link>
+        <Link href={`/deals/${id}/exit-scenarios`}><button>Exit Scenarios →</button></Link>
+      </div>
     </div>
   );
 }
