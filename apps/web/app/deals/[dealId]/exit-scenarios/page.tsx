@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { getDeal, submitExit, Deal } from "../../../../lib/api";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -272,6 +273,26 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 export default function ExitScenariosPage() {
   const { dealId } = useParams<{ dealId: string }>();
   const id = Number(dealId);
+
+  const [deal, setDeal] = useState<Deal | null>(null);
+  const [exSubmitting, setExSubmitting] = useState(false);
+  const [exSubmitDone, setExSubmitDone] = useState(false);
+
+  useEffect(() => {
+    getDeal(id).then(setDeal).catch(() => {});
+  }, [id]);
+
+  async function handleExitSubmit(baseMoic: number, baseIrr: number) {
+    setExSubmitting(true);
+    setExSubmitDone(false);
+    try {
+      const updated = await submitExit(id, baseMoic, baseIrr);
+      setDeal(updated);
+      setExSubmitDone(true);
+    } finally {
+      setExSubmitting(false);
+    }
+  }
 
   // ── State ───────────────────────────────────────────────────────────────────
   const [classes,   setClasses]   = useState<ShareClass[]>(DEFAULT_CLASSES);
@@ -716,6 +737,53 @@ ${flags.map(f => `- ${f}`).join("\n")}`;
           {buildMemo()}
         </pre>
       )}
+
+      {/* ══ Submit to Deal Page ════════════════════════════════════════════════ */}
+      <SectionHeader>6. Submit to Deal Page</SectionHeader>
+
+      <div style={{ border: "1px solid #d4b800", background: "#fffce6", borderRadius: "4px", padding: "1rem", maxWidth: 480 }}>
+        <p style={{ fontSize: "0.82em", color: "#78350f", marginTop: 0, marginBottom: "0.75rem" }}>
+          Confirm the base scenario return figures to surface on the deal summary page.
+        </p>
+
+        <div style={{ display: "flex", gap: "2rem", marginBottom: "0.75rem" }}>
+          <div>
+            <div style={{ fontSize: "0.7em", textTransform: "uppercase", letterSpacing: "0.06em", color: "#92400e" }}>Base MOIC</div>
+            <div style={{ fontFamily: "monospace", fontSize: "1.2em", fontWeight: "bold" }}>{fmtMOIC(base.fundMOIC)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.7em", textTransform: "uppercase", letterSpacing: "0.06em", color: "#92400e" }}>Base IRR ({holdYears}yr)</div>
+            <div style={{ fontFamily: "monospace", fontSize: "1.2em", fontWeight: "bold" }}>{fmtIRR(base.fundIRR)}</div>
+          </div>
+        </div>
+
+        {deal?.exit_submitted_at && !exSubmitDone && (
+          <div style={{ fontSize: "0.75em", color: "#92400e", marginBottom: "0.4rem" }}>
+            Last submitted: {new Date(deal.exit_submitted_at).toLocaleString()}
+          </div>
+        )}
+        {exSubmitDone && deal?.exit_submitted_at && (
+          <div style={{ fontSize: "0.75em", color: "#166534", marginBottom: "0.4rem" }}>
+            ✓ Submitted at {new Date(deal.exit_submitted_at).toLocaleString()}
+          </div>
+        )}
+        {!base.classes.some((r) => r.isUs) && (
+          <p style={{ fontSize: "0.78em", color: "#aaa", margin: "0 0 0.5rem" }}>
+            Mark your firm (★) in section 1 to enable submission.
+          </p>
+        )}
+        <button
+          onClick={() => handleExitSubmit(base.fundMOIC, base.fundIRR)}
+          disabled={exSubmitting || !base.classes.some((r) => r.isUs)}
+          style={{
+            fontFamily: "monospace", fontSize: "0.85em",
+            padding: "0.3rem 0.85rem", cursor: "pointer",
+            background: "#111", color: "#fff", border: "none",
+          }}
+        >
+          {exSubmitting ? "Submitting…" : "Confirm & submit to deal page"}
+        </button>
+      </div>
 
       {/* Navigation */}
       <div style={{ marginTop: "2.5rem", display: "flex", gap: "1rem", flexWrap: "wrap" }}>

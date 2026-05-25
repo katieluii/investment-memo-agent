@@ -18,10 +18,20 @@ export interface Deal {
   indication?: string;
   stage?: string;
   round_type?: string;
+  therapeutic_area?: string;
   geography?: string;
   fund_thesis?: string;
   memo_format?: string;
   status: string;
+  investment_amount?: number;
+  moic?: number;
+  irr?: number;
+  moic_submitted_at?: string;
+  peak_revenue_m?: number;
+  market_sizing_submitted_at?: string;
+  exit_base_moic?: number;
+  exit_base_irr?: number;
+  exit_submitted_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -32,9 +42,12 @@ export interface DealCreate {
   indication?: string;
   stage?: string;
   round_type?: string;
+  therapeutic_area?: string;
   geography?: string;
   fund_thesis?: string;
   memo_format?: string;
+  status?: string;
+  investment_amount?: number;
 }
 
 export interface Document {
@@ -62,6 +75,14 @@ export interface Memo {
   created_at: string;
 }
 
+export interface Comment {
+  id: number;
+  deal_id: number;
+  author_name: string;
+  body: string;
+  created_at: string;
+}
+
 // ── Deals ────────────────────────────────────────────────────────────────────
 
 export function getDeals(): Promise<Deal[]> {
@@ -80,11 +101,37 @@ export function createDeal(data: DealCreate): Promise<Deal> {
   });
 }
 
-export function updateDeal(dealId: number, data: DealCreate): Promise<Deal> {
+export function updateDeal(dealId: number, data: Partial<DealCreate>): Promise<Deal> {
   return apiFetch(`/deals/${dealId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
+  });
+}
+
+// ── Analytics submissions ─────────────────────────────────────────────────────
+
+export function submitCapTable(dealId: number, moic: number, irr: number): Promise<Deal> {
+  return apiFetch(`/deals/${dealId}/submit-cap-table`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ moic, irr }),
+  });
+}
+
+export function submitMarketSizing(dealId: number, peak_revenue_m: number): Promise<Deal> {
+  return apiFetch(`/deals/${dealId}/submit-market-sizing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ peak_revenue_m }),
+  });
+}
+
+export function submitExit(dealId: number, base_moic: number, base_irr: number): Promise<Deal> {
+  return apiFetch(`/deals/${dealId}/submit-exit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_moic, base_irr }),
   });
 }
 
@@ -192,4 +239,18 @@ export function getMemo(dealId: number): Promise<Memo> {
 export function getMemoExportUrl(dealId: number): string {
   const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   return `${base}/deals/${dealId}/memo/export`;
+}
+
+// ── Comments ─────────────────────────────────────────────────────────────────
+
+export function getComments(dealId: number): Promise<Comment[]> {
+  return apiFetch(`/deals/${dealId}/comments`);
+}
+
+export function addComment(dealId: number, author_name: string, body: string): Promise<Comment> {
+  return apiFetch(`/deals/${dealId}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ author_name, body }),
+  });
 }

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
+import { getDeal, submitCapTable, Deal } from "../../../../lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -713,6 +714,26 @@ export default function CapTablePage() {
   const id = Number(dealId);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // ── Deal data for auto-populate & submit ───────────────────────────────────
+
+  const [deal, setDeal] = useState<Deal | null>(null);
+  const [investmentLoaded, setInvestmentLoaded] = useState(false);
+  const [ctSubmitting, setCtSubmitting] = useState(false);
+  const [ctSubmitDone, setCtSubmitDone] = useState(false);
+  const [yearsToExit, setYearsToExit] = useState(5);
+
+  useEffect(() => {
+    getDeal(id).then((d) => {
+      setDeal(d);
+      if (d.investment_amount != null && !investmentLoaded) {
+        setParticipants((prev) =>
+          prev.map((p) => p.isUs ? { ...p, amountM: d.investment_amount! } : p)
+        );
+        setInvestmentLoaded(true);
+      }
+    }).catch(() => {});
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── State ──────────────────────────────────────────────────────────────────
 
   const [holders, setHolders] = useState<Holder[]>([
@@ -834,6 +855,26 @@ export default function CapTablePage() {
     };
     reader.readAsText(file);
     e.target.value = "";
+  }
+
+  // ── IRR & submit ──────────────────────────────────────────────────────────
+
+  const exitValForIrr = exitValuationM ?? postMoneyM * 5;
+  const exitValForFirm = exitValForIrr;
+  const ourExitValue = (lastStage.filter(h => h.isUs).reduce((s, h) => s + h.pct, 0) / 100) * exitValForFirm;
+  const moicForSubmit = ourInvested > 0 ? ourExitValue / ourInvested : 0;
+  const irrForSubmit = yearsToExit > 0 && moicForSubmit > 0 ? Math.pow(moicForSubmit, 1 / yearsToExit) - 1 : 0;
+
+  async function handleCapTableSubmit() {
+    setCtSubmitting(true);
+    setCtSubmitDone(false);
+    try {
+      const updated = await submitCapTable(id, moicForSubmit, irrForSubmit);
+      setDeal(updated);
+      setCtSubmitDone(true);
+    } finally {
+      setCtSubmitting(false);
+    }
   }
 
   // ── Derived checks ─────────────────────────────────────────────────────────
@@ -1211,6 +1252,74 @@ export default function CapTablePage() {
           </table>
         </div>
       )}
+
+      {/* ══ Submit to Deal Page ═══════════════════════════════════════════════ */}
+      <SectionHeader>7. Submit to Deal Page</SectionHeader>
+
+      <div style={{ border: "1px solid #d4b800", background: "#fffce6", borderRadius: "4px", padding: "1rem", maxWidth: 480 }}>
+        <p style={{ fontSize: "0.82em", color: "#78350f", marginTop: 0, marginBottom: "0.75rem" }}>
+          Confirm the key return figures to surface on the deal summary page.
+          {deal?.investment_amount != null && (
+            <span> (Investment amount auto-populated from deal: {fmtM(deal.investment_amount)})</span>
+          )}
+        </p>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, auto)", gap: "1.5rem", marginBottom: "0.75rem", alignItems: "start" }}>
+          <div>
+            <div style={{ fontSize: "0.7em", textTransform: "uppercase", letterSpacing: "0.06em", color: "#92400e" }}>MOIC</div>
+            <div style={{ fontFamily: "monospace", fontSize: "1.2em", fontWeight: "bold" }}>
+              {ourInvested > 0 ? fmtMOIC(moicForSubmit) : "—"}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.7em", textTransform: "uppercase", letterSpacing: "0.06em", color: "#92400e" }}>
+              Years to exit
+            </div>
+            <input
+              type="number"
+              value={yearsToExit}
+              min={1}
+              max={15}
+              step={1}
+              onChange={(e) => setYearsToExit(Math.max(1, Number(e.target.value) || 1))}
+              style={{ fontFamily: "monospace", width: "60px", fontSize: "1em" }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: "0.7em", textTransform: "uppercase", letterSpacing: "0.06em", color: "#92400e" }}>IRR</div>
+            <div style={{ fontFamily: "monospace", fontSize: "1.2em", fontWeight: "bold" }}>
+              {ourInvested > 0 ? fmtIRR(irrForSubmit) : "—"}
+            </div>
+          </div>
+        </div>
+
+        {deal?.moic_submitted_at && !ctSubmitDone && (
+          <div style={{ fontSize: "0.75em", color: "#92400e", marginBottom: "0.4rem" }}>
+            Last submitted: {new Date(deal.moic_submitted_at).toLocaleString()}
+          </div>
+        )}
+        {ctSubmitDone && deal?.moic_submitted_at && (
+          <div style={{ fontSize: "0.75em", color: "#166534", marginBottom: "0.4rem" }}>
+            ✓ Submitted at {new Date(deal.moic_submitted_at).toLocaleString()}
+          </div>
+        )}
+        {ourInvested === 0 && (
+          <p style={{ fontSize: "0.78em", color: "#aaa", margin: "0 0 0.5rem" }}>
+            Mark your firm (★) in section 2 to enable submission.
+          </p>
+        )}
+        <button
+          onClick={handleCapTableSubmit}
+          disabled={ctSubmitting || ourInvested === 0}
+          style={{
+            fontFamily: "monospace", fontSize: "0.85em",
+            padding: "0.3rem 0.85rem", cursor: ourInvested === 0 ? "not-allowed" : "pointer",
+            background: "#111", color: "#fff", border: "none",
+          }}
+        >
+          {ctSubmitting ? "Submitting…" : "Confirm & submit to deal page"}
+        </button>
+      </div>
 
       <div style={{ marginTop: "2.5rem", display: "flex", gap: "1rem", flexWrap: "wrap" }}>
         <Link href={`/deals/${id}/market-sizing`}><button style={{ fontFamily: "monospace", cursor: "pointer" }}>← Market Sizing</button></Link>

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { getDeal, submitMarketSizing, Deal } from "../../../../lib/api";
 import { PRESETS, PRESET_LABELS, getHelper, PresetKey, CoreInputKey } from "./marketSizingConfig";
 import {
   computeMarketEstimate,
@@ -316,6 +317,26 @@ function WebSearchModal({ onClose }: { onClose: () => void }) {
 export default function MarketSizingPage() {
   const { dealId } = useParams<{ dealId: string }>();
   const id = Number(dealId);
+
+  const [deal, setDeal] = useState<Deal | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitDone, setSubmitDone] = useState(false);
+
+  useEffect(() => {
+    getDeal(id).then(setDeal).catch(() => {});
+  }, [id]);
+
+  async function handleSubmitSom(somValue: number) {
+    setSubmitting(true);
+    setSubmitDone(false);
+    try {
+      const updated = await submitMarketSizing(id, somValue / 1_000_000);
+      setDeal(updated);
+      setSubmitDone(true);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const [mode, setMode] = useState<"bottom-up" | "top-down">("bottom-up");
 
@@ -848,6 +869,37 @@ export default function MarketSizingPage() {
                 Model exit scenarios in detail →
               </button>
             </Link>
+          </div>
+
+          {/* Submit to deal page */}
+          <div style={{ marginTop: "1.5rem", border: "1px solid #d4b800", background: "#fffce6", borderRadius: "4px", padding: "0.85rem 1rem" }}>
+            <div style={{ fontSize: "0.72em", textTransform: "uppercase", letterSpacing: "0.08em", color: "#92400e", fontWeight: "bold", marginBottom: "0.4rem" }}>
+              Submit to Deal Page
+            </div>
+            <div style={{ fontSize: "0.88em", marginBottom: "0.5rem" }}>
+              Peak SOM: <strong>{fmt$(displaySom)}</strong>
+            </div>
+            {deal?.market_sizing_submitted_at && !submitDone && (
+              <div style={{ fontSize: "0.75em", color: "#92400e", marginBottom: "0.4rem" }}>
+                Last submitted: {new Date(deal.market_sizing_submitted_at).toLocaleString()}
+              </div>
+            )}
+            {submitDone && deal?.market_sizing_submitted_at && (
+              <div style={{ fontSize: "0.75em", color: "#166534", marginBottom: "0.4rem" }}>
+                ✓ Submitted at {new Date(deal.market_sizing_submitted_at).toLocaleString()}
+              </div>
+            )}
+            <button
+              onClick={() => handleSubmitSom(displaySom)}
+              disabled={submitting || displaySom <= 0}
+              style={{
+                fontFamily: "monospace", fontSize: "0.85em",
+                padding: "0.25rem 0.75rem", cursor: "pointer",
+                background: "#111", color: "#fff", border: "none",
+              }}
+            >
+              {submitting ? "Submitting…" : "Confirm & submit"}
+            </button>
           </div>
 
           <p style={{ fontSize: "0.75em", color: "#aaa", marginTop: "1rem" }}>

@@ -10,9 +10,12 @@ class DealCreate(BaseModel):
     indication: Optional[str] = None
     stage: Optional[str] = None
     round_type: Optional[str] = None
+    therapeutic_area: Optional[str] = None
     geography: Optional[str] = None
     fund_thesis: Optional[str] = None
     memo_format: Optional[str] = None
+    status: Optional[str] = None
+    investment_amount: Optional[float] = None
 
 
 class DealOut(BaseModel):
@@ -24,10 +27,20 @@ class DealOut(BaseModel):
     indication: Optional[str]
     stage: Optional[str]
     round_type: Optional[str]
+    therapeutic_area: Optional[str]
     geography: Optional[str]
     fund_thesis: Optional[str]
     memo_format: Optional[str]
     status: str
+    investment_amount: Optional[float]
+    moic: Optional[float]
+    irr: Optional[float]
+    moic_submitted_at: Optional[datetime]
+    peak_revenue_m: Optional[float]
+    market_sizing_submitted_at: Optional[datetime]
+    exit_base_moic: Optional[float]
+    exit_base_irr: Optional[float]
+    exit_submitted_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
 
@@ -104,4 +117,33 @@ class AgentFeedbackOut(BaseModel):
     deal_id: int
     agent_name: str
     feedback_text: str
+    created_at: datetime
+
+
+class CapTableSubmit(BaseModel):
+    moic: float
+    irr: float
+
+
+class MarketSizingSubmit(BaseModel):
+    peak_revenue_m: float
+
+
+class ExitSubmit(BaseModel):
+    base_moic: float
+    base_irr: float
+
+
+class CommentCreate(BaseModel):
+    author_name: str
+    body: str
+
+
+class CommentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    deal_id: int
+    author_name: str
+    body: str
     created_at: datetime

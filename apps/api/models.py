@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -15,10 +15,23 @@ class Deal(Base):
     indication = Column(String)
     stage = Column(String)
     round_type = Column(String)
+    therapeutic_area = Column(String)
     geography = Column(String)
     fund_thesis = Column(Text)
     memo_format = Column(String)
-    status = Column(String, default="active")
+    status = Column(String, default="live")
+    investment_amount = Column(Float)
+
+    # Submitted analytics from analysis pages
+    moic = Column(Float)
+    irr = Column(Float)
+    moic_submitted_at = Column(DateTime)
+    peak_revenue_m = Column(Float)
+    market_sizing_submitted_at = Column(DateTime)
+    exit_base_moic = Column(Float)
+    exit_base_irr = Column(Float)
+    exit_submitted_at = Column(DateTime)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -29,6 +42,7 @@ class Deal(Base):
     feedback = relationship("AgentFeedback", back_populates="deal", cascade="all, delete-orphan")
     founder_insights = relationship("FounderInsights", back_populates="deal", uselist=False, cascade="all, delete-orphan")
     agent_runs = relationship("AgentRun", back_populates="deal", cascade="all, delete-orphan")
+    comments = relationship("Comment", back_populates="deal", cascade="all, delete-orphan", order_by="Comment.created_at.desc()")
 
 
 class Document(Base):
@@ -120,3 +134,15 @@ class AgentFeedback(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     deal = relationship("Deal", back_populates="feedback")
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    deal_id = Column(Integer, ForeignKey("deals.id"), nullable=False)
+    author_name = Column(String, nullable=False)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    deal = relationship("Deal", back_populates="comments")
